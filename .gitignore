@@ -1,0 +1,5 @@
+.mypy_cache/
+.vscode/
+nsys-rep/
+output/
+built/
