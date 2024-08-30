@@ -7,31 +7,31 @@ PROGS = built/sync_vs_overlap built/playground built/sync_vs_overlap_custom_diag
 
 all: $(PROGS)
 
-sync_vs_overlap: sync_vs_overlap.cu
+built/sync_vs_overlap: sync_vs_overlap.cu
 	$(CXX) -o $@ $^ -lcublas
 
-playground: playground.cu
+built/playground: playground.cu
 	$(CXX) -o $@ $^ -lcublas
 
-sync_vs_overlap_custom_diag: sync_vs_overlap_custom_diag.cu
+built/sync_vs_overlap_custom_diag: sync_vs_overlap_custom_diag.cu
 	$(CXX) -o $@ $^ -lcublas
 
-sync_vs_overlap_diag: sync_vs_overlap_diag.cu
+built/sync_vs_overlap_diag: sync_vs_overlap_diag.cu
 	$(CXX) -o $@ $^ -lcublas
 
-sync_vs_overlap_simple: sync_vs_overlap_simple.cu
+built/sync_vs_overlap_simple: sync_vs_overlap_simple.cu
 	$(CXX) -o $@ $^ -lcublas
 
-sync_vs_overlap_streams: sync_vs_overlap_streams.cu
+built/sync_vs_overlap_streams: sync_vs_overlap_streams.cu
 	$(CXX) -o $@ $^ -lcublas
 
-sync_vs_overlap_one_calc_per_iter_no_cublas: sync_vs_overlap_one_calc_per_iter_no_cublas.cu
+built/sync_vs_overlap_one_calc_per_iter_no_cublas: sync_vs_overlap_one_calc_per_iter_no_cublas.cu
 	$(CXX) -o $@ $^
 
-sync_vs_overlap_one_iter: sync_vs_overlap_one_iter.cu -lcublas
+built/sync_vs_overlap_one_iter: sync_vs_overlap_one_iter.cu -lcublas
 	$(CXX) -o $@ $^
 
-sync_vs_overlap_one_iter_add: sync_vs_overlap_one_iter_add.cu
+built/sync_vs_overlap_one_iter_add: sync_vs_overlap_one_iter_add.cu
 	$(CXX) -o $@ $^
 
 clean:

@@ -17,15 +17,20 @@ void maxError(float *output, int iterations, int N, bool isC) {
     float maxErr = 0;
     int maxI = -1;
     const float epsilon = 1e-6;
+    // float expected = isC ? 3.0f : 6.0f;
+    // float expected = isC ? 7.0f : 10.0f;
+    // float expected = 4 * iterations + 3;
+    // heavier comp:
+    float expected = 8 * iterations + 3;
+    if (!isC) expected += 3;
     for (int i = 0; i < N; ++i) {
-        float expected = isC ? 3.0f : 6.0f;
         float diff = std::abs(output[i] - expected);
         if (diff > maxErr) {
             maxErr = diff;
             maxI = i;
         }
         if (diff > epsilon) {
-            std::cerr << "Error: " << (isC ? "C" : "F") << ": " << i << " (" << output[i] << ")!" << std::endl;
+            std::cout << "Error: " << (isC ? "C" : "F") << ": " << i << " (" << output[i] << ")!" << std::endl;
         }
     }
     std::cout << "Max error: " << maxErr << std::endl;
@@ -65,16 +70,18 @@ float experiment(bool overlap, int N, int iterations) {
         h_D[i] = 3.0f;
     }
 
-    cudaEvent_t startEvent, endEvent, copyEvent;
+    cudaEvent_t startEvent, endEvent, copyEvent, firstCompEvent;
     checkCudaError(cudaEventCreate(&startEvent));
     checkCudaError(cudaEventCreate(&endEvent));
 
-    cudaStream_t stream0, stream1;
+    cudaStream_t compute0, compute1, copyStream;
     checkCudaError(cudaSetDevice(0));
-    checkCudaError(cudaStreamCreate(&stream0));
+    checkCudaError(cudaStreamCreate(&compute0));
+    checkCudaError(cudaEventCreate(&firstCompEvent));
+    checkCudaError(cudaStreamCreate(&copyStream));
     checkCudaError(cudaEventCreate(&copyEvent));
     checkCudaError(cudaSetDevice(1));
-    checkCudaError(cudaStreamCreate(&stream1));
+    checkCudaError(cudaStreamCreate(&compute1));
 
     checkCudaError(cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice));
     checkCudaError(cudaMemcpy(d_B, h_B, size, cudaMemcpyHostToDevice));
@@ -88,48 +95,57 @@ float experiment(bool overlap, int N, int iterations) {
     for (int i = 0; i < iterations; ++i) {
         checkCudaError(cudaSetDevice(0));
         // puts("first add:");
-        add<<<grid, block, 0, stream0>>>(d_A, d_B, d_C, N);
+        add<<<grid, block, 0, compute0>>>(d_A, d_B, d_C, N);  // C_1 = A_0 + B_0
+        checkCudaError(cudaGetLastError());
+        add<<<grid, block, 0, compute0>>>(d_C, d_B, d_A, N);  // A_1 = C_1 + B_0
+        checkCudaError(cudaGetLastError());
+        add<<<grid, block, 0, compute0>>>(d_A, d_B, d_C, N);  // C_2 = A_1 + B_0
+                                                              // C' = A + 3 * B = A' + B
+                                                              // A' = A + 2 * B
+                                                              // A' = 1 -> 5 -> 9 -> ... >> 4 * it + 1
+        // even heavier computation
+        add<<<grid, block, 0, compute0>>>(d_C, d_B, d_A, N);
+        checkCudaError(cudaGetLastError());
+        add<<<grid, block, 0, compute0>>>(d_A, d_B, d_C, N);  // C'' = C' + 2 * B = A + 5 * B
+                                                              // A'' = C' + B = A + 4 * B
+                                                              // A'' = 1 -> 9 -> 17 -> ... >> 8 * it + 1
         checkCudaError(cudaGetLastError());
         // puts("first add finished");
         if (overlap) {
-            // checkCudaError(cudaMemcpyPeerAsync(d_E, 1, d_C, 0, size, stream0));
+            checkCudaError(cudaEventRecord(firstCompEvent, compute0));
+            checkCudaError(cudaStreamWaitEvent(copyStream, firstCompEvent));
+            checkCudaError(cudaMemcpyPeerAsync(d_E, 1, d_C, 0, size, copyStream));
             // puts("overlap copy:");
-            checkCudaError(cudaMemcpyAsync(d_E, d_C, size, cudaMemcpyDeviceToDevice, stream0));
+            // checkCudaError(cudaMemcpyAsync(d_E, d_C, size, cudaMemcpyDeviceToDevice, copyStream));
             // puts("overlap copy launched");
-            checkCudaError(cudaEventRecord(copyEvent, stream0));
+            checkCudaError(cudaEventRecord(copyEvent, copyStream));
         } else {
             // puts("sync copy:");
-            // checkCudaError(cudaStreamSynchronize(stream0));
-            // checkCudaError(cudaMemcpyPeer(d_E, 1, d_C, 0, size));
+            // checkCudaError(cudaStreamSynchronize(compute0));
+            checkCudaError(cudaMemcpyPeerAsync(d_E, 1, d_C, 0, size, compute0));
+            checkCudaError(cudaEventRecord(copyEvent, compute0));
             // checkCudaError(cudaMemcpy(d_E, d_C, size, cudaMemcpyDeviceToDevice));
-            checkCudaError(cudaMemcpyAsync(d_E, d_C, size, cudaMemcpyDeviceToDevice, stream0));
+            // checkCudaError(cudaMemcpyAsync(d_E, d_C, size, cudaMemcpyDeviceToDevice, compute0));
             // puts("sync copy launched");
-            // puts("syncing stream0:");
-            checkCudaError(cudaStreamSynchronize(stream0));
+            // puts("syncing compute0:");
+            // checkCudaError(cudaStreamSynchronize(compute0));
             // puts("synced");
-            // checkCudaError(cudaEventRecord(copyEvent, stream0));
-            // checkCudaError(cudaStreamSynchronize(0));
             // puts("recording copy event:");
-            checkCudaError(cudaEventRecord(copyEvent, stream0));
+            // checkCudaError(cudaEventRecord(copyEvent, compute0));
             // puts("recorded");
         }
         checkCudaError(cudaSetDevice(1));
-        checkCudaError(cudaStreamWaitEvent(stream1, copyEvent, 0));
-        // checkCudaError(cudaEventSynchronize(copyEvent));
+        checkCudaError(cudaStreamWaitEvent(compute1, copyEvent, 0));
 
         // puts("second add:");
-        add<<<grid, block, 0, stream1>>>(d_D, d_E, d_F, N);
+        add<<<grid, block, 0, compute1>>>(d_D, d_E, d_F, N);
         checkCudaError(cudaGetLastError());
     }
 
-    checkCudaError(cudaStreamSynchronize(stream0));
-    checkCudaError(cudaStreamSynchronize(stream1));
+    // checkCudaError(cudaStreamSynchronize(compute0));
+    // checkCudaError(cudaStreamSynchronize(compute1));
     checkCudaError(cudaEventRecord(endEvent, 0));
     checkCudaError(cudaEventSynchronize(endEvent));
-    // checkCudaError(cudaSetDevice(0));
-    // checkCudaError(cudaDeviceSynchronize());
-    // checkCudaError(cudaSetDevice(1));
-    // checkCudaError(cudaDeviceSynchronize());
 
     float elapse;
     checkCudaError(cudaEventElapsedTime(&elapse, startEvent, endEvent));
@@ -138,10 +154,8 @@ float experiment(bool overlap, int N, int iterations) {
 
     checkCudaError(cudaMemcpy(h_C, d_C, size, cudaMemcpyDeviceToHost));
     checkCudaError(cudaMemcpy(h_F, d_F, size, cudaMemcpyDeviceToHost));
-    // checkCudaError(cudaMemcpyAsync(h_C, d_C, size, cudaMemcpyDeviceToHost, stream0));
-    // checkCudaError(cudaMemcpyAsync(h_F, d_F, size, cudaMemcpyDeviceToHost, stream1));
-    checkCudaError(cudaStreamSynchronize(stream0));
-    checkCudaError(cudaStreamSynchronize(stream1));
+    checkCudaError(cudaStreamSynchronize(compute0));
+    checkCudaError(cudaStreamSynchronize(compute1));
 
     maxError(h_C, iterations, N, true);
     maxError(h_F, iterations, N, false);
@@ -160,8 +174,8 @@ float experiment(bool overlap, int N, int iterations) {
     checkCudaError(cudaEventDestroy(endEvent));
     checkCudaError(cudaEventDestroy(copyEvent));
 
-    checkCudaError(cudaStreamDestroy(stream0));
-    checkCudaError(cudaStreamDestroy(stream1));
+    checkCudaError(cudaStreamDestroy(compute0));
+    checkCudaError(cudaStreamDestroy(compute1));
 
     checkCudaError(cudaFreeHost(h_A));
     checkCudaError(cudaFreeHost(h_B));
@@ -173,16 +187,21 @@ float experiment(bool overlap, int N, int iterations) {
 }
 
 int main() {
-    const int experiments = 1;
-    const int Ns[experiments] = {10};
+    const int experiments = 10;
+    // const int experiments = 4;
+    // const int Ns[experiments] = {10, 1000, 10000, 100000000, 1000000000};
+    // const int Ns[experiments] = {10, 1000, 10000, 100000000};
     // const int experiments = 11;
     // for N in [417, 1499], CUBLAS_STATUS_EXECUTION_FAILED error???
     // const int Ns[experiments] = {400, 1500, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000};
     // const int Ns[experiments] = {400, 11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000, 20000};
     const int iterations = 10;
+    int base = 1;
 
     for (int i = 0; i < experiments; i++) {
-        const int N = Ns[i];
+        // const int N = Ns[i];
+        const int N = base;
+        base *= 10;
         std::cout << "=============================="
                 << std::endl << "N = " << N << std::endl;
         std::cout << "Running synchronous version...\n";
