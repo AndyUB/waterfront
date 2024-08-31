@@ -17,12 +17,13 @@ void maxError(float *output, int iterations, int N, bool isC) {
     float maxErr = 0;
     int maxI = -1;
     const float epsilon = 1e-6;
-    // float expected = isC ? 3.0f : 6.0f;
-    // float expected = isC ? 7.0f : 10.0f;
+    // basic comp:
+    float expected = isC ? 3.0f : 6.0f;
+    // heavy comp:
     // float expected = 4 * iterations + 3;
     // heavier comp:
-    float expected = 8 * iterations + 3;
-    if (!isC) expected += 3;
+    // float expected = 8 * iterations + 3;
+    // if (!isC) expected += 3;
     for (int i = 0; i < N; ++i) {
         float diff = std::abs(output[i] - expected);
         if (diff > maxErr) {
@@ -94,56 +95,37 @@ float experiment(bool overlap, int N, int iterations) {
 
     for (int i = 0; i < iterations; ++i) {
         checkCudaError(cudaSetDevice(0));
-        // puts("first add:");
         add<<<grid, block, 0, compute0>>>(d_A, d_B, d_C, N);  // C_1 = A_0 + B_0
         checkCudaError(cudaGetLastError());
-        add<<<grid, block, 0, compute0>>>(d_C, d_B, d_A, N);  // A_1 = C_1 + B_0
-        checkCudaError(cudaGetLastError());
-        add<<<grid, block, 0, compute0>>>(d_A, d_B, d_C, N);  // C_2 = A_1 + B_0
-                                                              // C' = A + 3 * B = A' + B
-                                                              // A' = A + 2 * B
-                                                              // A' = 1 -> 5 -> 9 -> ... >> 4 * it + 1
-        // even heavier computation
-        add<<<grid, block, 0, compute0>>>(d_C, d_B, d_A, N);
-        checkCudaError(cudaGetLastError());
-        add<<<grid, block, 0, compute0>>>(d_A, d_B, d_C, N);  // C'' = C' + 2 * B = A + 5 * B
+        // add<<<grid, block, 0, compute0>>>(d_C, d_B, d_A, N);  // A_1 = C_1 + B_0
+        // checkCudaError(cudaGetLastError());
+        // add<<<grid, block, 0, compute0>>>(d_A, d_B, d_C, N);  // C_2 = A_1 + B_0
+        //                                                       // C' = A + 3 * B = A' + B
+        //                                                       // A' = A + 2 * B
+        //                                                       // A' = 1 -> 5 -> 9 -> ... >> 4 * it + 1
+        // // even heavier computation
+        // add<<<grid, block, 0, compute0>>>(d_C, d_B, d_A, N);
+        // checkCudaError(cudaGetLastError());
+        // add<<<grid, block, 0, compute0>>>(d_A, d_B, d_C, N);  // C'' = C' + 2 * B = A + 5 * B
                                                               // A'' = C' + B = A + 4 * B
                                                               // A'' = 1 -> 9 -> 17 -> ... >> 8 * it + 1
         checkCudaError(cudaGetLastError());
-        // puts("first add finished");
         if (overlap) {
             checkCudaError(cudaEventRecord(firstCompEvent, compute0));
             checkCudaError(cudaStreamWaitEvent(copyStream, firstCompEvent));
             checkCudaError(cudaMemcpyPeerAsync(d_E, 1, d_C, 0, size, copyStream));
-            // puts("overlap copy:");
-            // checkCudaError(cudaMemcpyAsync(d_E, d_C, size, cudaMemcpyDeviceToDevice, copyStream));
-            // puts("overlap copy launched");
             checkCudaError(cudaEventRecord(copyEvent, copyStream));
         } else {
-            // puts("sync copy:");
-            // checkCudaError(cudaStreamSynchronize(compute0));
             checkCudaError(cudaMemcpyPeerAsync(d_E, 1, d_C, 0, size, compute0));
             checkCudaError(cudaEventRecord(copyEvent, compute0));
-            // checkCudaError(cudaMemcpy(d_E, d_C, size, cudaMemcpyDeviceToDevice));
-            // checkCudaError(cudaMemcpyAsync(d_E, d_C, size, cudaMemcpyDeviceToDevice, compute0));
-            // puts("sync copy launched");
-            // puts("syncing compute0:");
-            // checkCudaError(cudaStreamSynchronize(compute0));
-            // puts("synced");
-            // puts("recording copy event:");
-            // checkCudaError(cudaEventRecord(copyEvent, compute0));
-            // puts("recorded");
         }
         checkCudaError(cudaSetDevice(1));
         checkCudaError(cudaStreamWaitEvent(compute1, copyEvent, 0));
 
-        // puts("second add:");
         add<<<grid, block, 0, compute1>>>(d_D, d_E, d_F, N);
         checkCudaError(cudaGetLastError());
     }
 
-    // checkCudaError(cudaStreamSynchronize(compute0));
-    // checkCudaError(cudaStreamSynchronize(compute1));
     checkCudaError(cudaEventRecord(endEvent, 0));
     checkCudaError(cudaEventSynchronize(endEvent));
 
@@ -188,18 +170,10 @@ float experiment(bool overlap, int N, int iterations) {
 
 int main() {
     const int experiments = 10;
-    // const int experiments = 4;
-    // const int Ns[experiments] = {10, 1000, 10000, 100000000, 1000000000};
-    // const int Ns[experiments] = {10, 1000, 10000, 100000000};
-    // const int experiments = 11;
-    // for N in [417, 1499], CUBLAS_STATUS_EXECUTION_FAILED error???
-    // const int Ns[experiments] = {400, 1500, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000};
-    // const int Ns[experiments] = {400, 11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000, 20000};
     const int iterations = 10;
     int base = 1;
 
     for (int i = 0; i < experiments; i++) {
-        // const int N = Ns[i];
         const int N = base;
         base *= 10;
         std::cout << "=============================="
