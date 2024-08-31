@@ -9,8 +9,21 @@ inline void checkCudaError(cudaError_t err) {
 
 __global__ void add(float* A, float* B, float* C, int N) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (tid < N)
-        C[tid] = A[tid] + B[tid];
+    if (tid < N) {
+        for (int i = 0; i < 32; i++) {
+            float sinA = sinf(A[tid]);
+            float cosA = cosf(A[tid]);
+            float idA = sqrtf(sinA * sinA + cosA * cosA) * A[tid];
+            float sinB = sinf(B[tid]);
+            float cosB = cosf(B[tid]);
+            float idB = sqrtf(sinB * sinB + cosB * cosB) * B[tid];
+            float added = idA + idB;
+            float sinAdded = sinf(added);
+            float cosAdded = cosf(added);
+            float idAdded = sqrtf(sinAdded * sinAdded + cosAdded * cosAdded) * added;
+            C[tid] = idAdded;
+        }
+    }
 }
 
 void maxError(float *output, int iterations, int N, bool isC) {
@@ -97,19 +110,6 @@ float experiment(bool overlap, int N, int iterations) {
         checkCudaError(cudaSetDevice(0));
         add<<<grid, block, 0, compute0>>>(d_A, d_B, d_C, N);  // C_1 = A_0 + B_0
         checkCudaError(cudaGetLastError());
-        // add<<<grid, block, 0, compute0>>>(d_C, d_B, d_A, N);  // A_1 = C_1 + B_0
-        // checkCudaError(cudaGetLastError());
-        // add<<<grid, block, 0, compute0>>>(d_A, d_B, d_C, N);  // C_2 = A_1 + B_0
-        //                                                       // C' = A + 3 * B = A' + B
-        //                                                       // A' = A + 2 * B
-        //                                                       // A' = 1 -> 5 -> 9 -> ... >> 4 * it + 1
-        // // even heavier computation
-        // add<<<grid, block, 0, compute0>>>(d_C, d_B, d_A, N);
-        // checkCudaError(cudaGetLastError());
-        // add<<<grid, block, 0, compute0>>>(d_A, d_B, d_C, N);  // C'' = C' + 2 * B = A + 5 * B
-                                                              // A'' = C' + B = A + 4 * B
-                                                              // A'' = 1 -> 9 -> 17 -> ... >> 8 * it + 1
-        checkCudaError(cudaGetLastError());
         if (overlap) {
             checkCudaError(cudaEventRecord(firstCompEvent, compute0));
             checkCudaError(cudaStreamWaitEvent(copyStream, firstCompEvent));
@@ -169,8 +169,8 @@ float experiment(bool overlap, int N, int iterations) {
 }
 
 int main() {
-    const int experiments = 1;
-    const int iterations = 1;
+    const int experiments = 8;
+    const int iterations = 100;
     int base = 1;
 
     for (int i = 0; i < experiments; i++) {
