@@ -189,7 +189,13 @@ float experiment_grouped_ops_order(bool overlap, int N, int iterations, int cycl
     }
 
     checkCudaError(cudaEventRecord(endEvent, 0));
+    const auto chronoPriorSync = std::chrono::high_resolution_clock::now();
+    const float chronoPriorSyncElapse = std::chrono::duration<float>(chronoPriorSync - chronoStart).count();
+    std::cout << "chrono time prior sync: " << chronoPriorSyncElapse << std::endl;
     checkCudaError(cudaEventSynchronize(endEvent));
+    // std::cerr << "last record..." << std::endl;
+    // checkCudaError(cudaEventRecord(endEvent, 0));
+    // std::cerr << "last record completes" << std::endl;
 
     const auto chronoEnd = std::chrono::high_resolution_clock::now();
     const float chronoElapse = std::chrono::duration<float>(chronoEnd - chronoStart).count();
@@ -365,15 +371,30 @@ float experiment_seq_order(bool overlap, int N, int iterations, int cycles) {
     }
 
     checkCudaError(cudaEventRecord(endEvent, 0));
+    const auto chronoPriorSync = std::chrono::high_resolution_clock::now();
+    const float chronoPriorSyncElapse = std::chrono::duration<float>(chronoPriorSync - chronoStart).count();
+    std::cout << "chrono time prior sync: " << chronoPriorSyncElapse << std::endl;
     checkCudaError(cudaEventSynchronize(endEvent));
+    // std::cerr << "last record..." << std::endl;
+    // checkCudaError(cudaEventRecord(endEvent, 0));
+    // checkCudaError(cudaEventSynchronize(endEvent));
+    // std::cerr << "last record completes" << std::endl;
 
     float elapse;
+    // std::cerr << "elaspe measuring" << std::endl;
     checkCudaError(cudaEventElapsedTime(&elapse, startEvent, endEvent));
+    // std::cerr << "elaspe measured" << std::endl;
+
+    const auto chronoEnd = std::chrono::high_resolution_clock::now();
+    const float chronoElapse = std::chrono::duration<float>(chronoEnd - chronoStart).count();
+    std::cout << "chrono time: " << chronoElapse << std::endl;
 
     std::cout << "Total time (" << (overlap ? "Overlapping" : "Synchronous") << "): " << elapse << " ms\n";
 
+    // std::cerr << "copy back...";
     checkCudaError(cudaMemcpy(h_C, d_C, size, cudaMemcpyDeviceToHost));
     checkCudaError(cudaMemcpy(h_F, d_F, size, cudaMemcpyDeviceToHost));
+    // std::cerr << " ...copy back completed\n";
 
     maxError(h_C, iterations, N, true);
     maxError(h_F, iterations, N, false);

@@ -46,6 +46,9 @@ built/sync_vs_overlap_heavy_add_no_data_race: sync_vs_overlap_heavy_add_no_data_
 built/sync_vs_overlap_heavy_add_diff_issue_order: sync_vs_overlap_heavy_add_diff_issue_order.cu
 	$(CXX) -o $@ $^
 
+built/sync_vs_overlap_heavy_add_cmp: sync_vs_overlap_heavy_add_cmp.cu
+	$(CXX) -o $@ $^
+
 built/%: %.cu
 	$(CXX) -o $@ $^
 
