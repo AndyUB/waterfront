@@ -13,7 +13,8 @@ PROGS = built/old/matmul \
 	built/old/sync_vs_overlap_heavy_add \
 	built/old/sync_vs_overlap_heavy_add_no_data_race \
 	built/old/sync_vs_overlap_heavy_add_diff_issue_order \
-	built/sync_vs_overlap_heavy_add_cmp
+	built/sync_vs_overlap_heavy_add_cmp \
+	built/sync_vs_overlap_heavy_add_warmup_repl
 
 all: $(PROGS)
 

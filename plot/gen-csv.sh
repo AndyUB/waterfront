@@ -1,9 +1,9 @@
 cat $1 \
-| grep -e "N = " -e "Total time" -e speedup \
-| sed -E 's/[^0-9. ]//g' \
-| sed -E 's/^[ \t]*//; s/[ \t]*$//; s/[ \t]+/ /g' > cpp-nums.txt
+| grep -e "N = " -e "cuda time" -e speedup \
+| sed -E 's/[^0-9. \-]//g' \
+| sed -E 's/^[ \t]*//; s/[ \t]*$//; s/[ \t]+/ /g' > nums.txt
 
-cat cpp-nums.txt \
+cat nums.txt \
 | tr '\n' ' ' \
 | sed 's/[ ]*$//' \
 | tr ' ' ',' \
@@ -22,4 +22,4 @@ cat cpp-nums.txt \
     }
     print "";
 }' \
-> cpp-nums.csv
+> nums.csv

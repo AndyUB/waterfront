@@ -31,8 +31,8 @@ void heavy_add(float* A, float* B, float* C, int N, int cycles) {
 
 
 class IssueOrder(Enum):
-    SEQ = r"{comp_0^0, comm_0^0, comp_0^1} {comp_1^0, comm_1^0, comp_1^1}"
-    GROUP = r"{comp_0^0, comp_1^0} {comm_0^0, comm_1^0} {comp_0^1, comp_1^1}"
+    SEQ = (r"{comp_0^0, comm_0^0, comp_0^1} {comp_1^0, comm_1^0, comp_1^1}", 0)
+    GROUP = (r"{comp_0^0, comp_1^0} {comm_0^0, comm_1^0} {comp_0^1, comp_1^1}", 1)
 
 
 def experiment(
@@ -230,17 +230,27 @@ def run_cmp_expr(N: int, iters: int, cycles: int, order: IssueOrder) -> None:
     print(f"speedup: {speedup}")
 
 
+def run_repl(repl: int, N: int, iters: int, cycles: int, order: IssueOrder) -> None:
+    for _ in range(repl):
+        run_cmp_expr(N, iters, cycles, order)
+
+
 def print_expr_settings(N: int, iters: int, cycles: int, order: IssueOrder) -> None:
     print("==============================")
-    print(f"N = {N}, #it = {iters}, cycles = {cycles}, order = {order}")
+    print(f"N = {N}, #it = {iters}, cycles = {cycles}, order = {order.value[1]}")
 
 
 def main() -> None:
+    REPLICATION_TRIALS: int = 10
+
     BEST_CYCLES: int = 32
     BEST_ITERS: int = 100
     BEST_N: int = 1_000_000
     # BEST_ORDER: IssueOrder = IssueOrder.SEQ
     BEST_ORDER: IssueOrder = IssueOrder.GROUP
+
+    warmup_trials: int = 5
+    warmup_N: int = 1000
 
     N_exp_trials: int = 8
     N_exp_base: int = 1
@@ -258,11 +268,17 @@ def main() -> None:
     cycles_inc_base: int = 10
     cycles_inc_step: int = 10
 
+    print("Warming up:")
+    print()
+    for _ in range(warmup_trials):
+        run_cmp_expr(warmup_N, BEST_ITERS, BEST_CYCLES, BEST_ORDER)
+    print()
+
     print("Changing input sizes:")
     print()
     # for _ in tqdm(range(N_exp_trials)):
     for _ in range(N_exp_trials):
-        run_cmp_expr(N_exp_base, BEST_ITERS, BEST_CYCLES, BEST_ORDER)
+        run_repl(REPLICATION_TRIALS, N_exp_base, BEST_ITERS, BEST_CYCLES, BEST_ORDER)
         N_exp_base *= N_exp_step
     print()
 
@@ -270,7 +286,7 @@ def main() -> None:
     print()
     # for _ in tqdm(range(iters_exp_trials)):
     for _ in range(iters_exp_trials):
-        run_cmp_expr(BEST_N, iters_exp_base, BEST_CYCLES, BEST_ORDER)
+        run_repl(REPLICATION_TRIALS, BEST_N, iters_exp_base, BEST_CYCLES, BEST_ORDER)
         iters_exp_base *= iters_exp_step
     print()
 
@@ -278,15 +294,15 @@ def main() -> None:
     # for order in tqdm(IssueOrder):
     for order in IssueOrder:
         print()
-        print(order.value)
-        run_cmp_expr(BEST_N, BEST_ITERS, BEST_CYCLES, order)
+        # print(order.value)
+        run_repl(REPLICATION_TRIALS, BEST_N, BEST_ITERS, BEST_CYCLES, order)
     print()
 
     print("Changing computation intensity (exponential):")
     print()
     # for _ in tqdm(range(cycles_exp_trials)):
     for _ in range(cycles_exp_trials):
-        run_cmp_expr(BEST_N, BEST_ITERS, cycles_exp_base, BEST_ORDER)
+        run_repl(REPLICATION_TRIALS, BEST_N, BEST_ITERS, cycles_exp_base, BEST_ORDER)
         cycles_exp_base *= cycles_exp_step
     print()
 
@@ -294,7 +310,7 @@ def main() -> None:
     print()
     # for _ in tqdm(range(cycles_inc_trials)):
     for _ in range(cycles_inc_trials):
-        run_cmp_expr(BEST_N, BEST_ITERS, cycles_inc_base, BEST_ORDER)
+        run_repl(REPLICATION_TRIALS, BEST_N, BEST_ITERS, cycles_inc_base, BEST_ORDER)
         cycles_inc_base += cycles_inc_step
     print()
 
